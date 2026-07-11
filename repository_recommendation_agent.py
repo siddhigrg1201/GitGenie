@@ -162,13 +162,19 @@ Select and return ONLY the TOP 10 repositories.
 
 Rank them from highest score to lowest score.
 
-For each repository, also mention which of the user's skills or interests matched the repository.
+For each repository:
+
+- Mention which of the user's skills or interests matched the repository.
+- Preserve the original repository name, owner, and GitHub URL exactly as provided in the input data.
+- Do NOT invent or modify repository names, owners, or URLs.
 
 Return ONLY valid JSON in the following format:
 
 [
     {{
         "repository": "Repository Name",
+        "owner": "Repository Owner",
+        "url": "https://github.com/owner/repository",
         "score": 95,
         "difficulty": "Easy",
         "matching_skills": [
@@ -187,8 +193,9 @@ Rules:
 - Do NOT write ```json.
 - Do NOT include any explanation before or after the JSON.
 - The score must be an integer between 0 and 100.
-- The difficulty must be exactly one of: Easy, Medium, Hard.
+- The difficulty must be exactly one of: Easy, Medium, or Hard.
 - "matching_skills" must always be a JSON array.
+- Preserve the repository name, owner, and URL exactly as provided.
 - Return exactly 10 repositories.
 """
 
