@@ -7,7 +7,6 @@ import json
 load_dotenv()
 
 api_key = os.getenv("GEMINI_API_KEY")
-print("Loaded key:", api_key[:8])
 
 if not api_key:
     raise ValueError("GEMINI_API_KEY not found.")
@@ -172,7 +171,7 @@ Return the response in clean Markdown.
 Do NOT return JSON.
 """
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=prompt
     )
 
