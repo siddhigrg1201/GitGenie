@@ -72,7 +72,7 @@ def fetch_readme(repo_name):
     if response.status_code == 200:
         return response.text
 
-
+    print("README not found.")
     return ""
 
 
@@ -87,10 +87,18 @@ def fetch_issues(repo_name):
     )
 
 
-    response = requests.get(url)
+    try:
+        response = requests.get(
+            url,
+            timeout=10
+        )
+    except requests.RequestException as e:
+        print("Issue Fetch Failed:", e)
+        return []
 
 
     if response.status_code != 200:
+        print("GitHub API Error while fetching issues:", response.status_code)
         return []
 
 
@@ -139,7 +147,7 @@ Repository Information:
 
 README:
 
-{readme[:4000]}
+{readme[:6000]}
 
 
 Open Issues:
@@ -203,11 +211,14 @@ Return clean Markdown.
 """
 
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt
-    )
-
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+    except Exception as e:
+        print("Gemini API Error:", e)
+        return None
 
     return response.text
 
@@ -251,12 +262,14 @@ def main():
 
 
     roadmap = generate_roadmap(
-        repo,
-        readme,
-        issues
-    )
+    repo,
+    readme,
+    issues
+)
 
-
+    if roadmap is None:
+        print("Could not generate contribution roadmap.")
+        return
 
     print("=" * 70)
     print("CONTRIBUTION ROADMAP")
