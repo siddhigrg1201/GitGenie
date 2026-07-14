@@ -3,7 +3,7 @@ from google import genai
 from dotenv import load_dotenv
 import os
 import json
-from skill_agent import generate_profile
+from agents.skill_agent import generate_profile
 from groq import Groq
 
 load_dotenv()
@@ -313,15 +313,20 @@ def recommend_repositories(profile):
 
 def main():
 
-    profile = generate_profile()
+    user_skills = input("Enter your programming skills (comma separated): ")
+    experience = input("Enter your experience level (Beginner/Intermediate/Advanced): ")
+    domain = input("Which domain interests you? (Web Development, AI/ML, App Development, Data Science, etc.): ")
+
+    profile = generate_profile(
+        user_skills,
+        experience,
+        domain
+    )
 
     if profile is None:
         print("Could not generate user profile.")
         return
 
-    # print("\nPROFILE RECEIVED FROM SKILL AGENT\n")
-    # print(json.dumps(profile, indent=4))
-   
     recommendations = recommend_repositories(profile)
 
     print(json.dumps(recommendations, indent=4))
