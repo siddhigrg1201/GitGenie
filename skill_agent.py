@@ -73,11 +73,7 @@ def generate_with_fallback(prompt):
         return None
 
 
-def generate_profile():
-
-    user_skills = input("Enter your programming skills (comma separated): ")
-    experience = input("Enter your experience level (Beginner/Intermediate/Advanced): ")
-    domain = input("Which domain interests you? (Web Development, AI/ML, App Development, Data Science, etc.): ")
+def generate_profile(user_skills, experience, domain):
 
     prompt = f"""
 You are an experienced career mentor.
@@ -131,8 +127,15 @@ Rules:
 
 if __name__ == "__main__":
 
-    profile = generate_profile()
+    user_skills = input("Enter your programming skills (comma separated): ")
+    experience = input("Enter your experience level (Beginner/Intermediate/Advanced): ")
+    domain = input("Which domain interests you? (Web Development, AI/ML, App Development, Data Science, etc.): ")
+
+    profile = generate_profile(
+        user_skills,
+        experience,
+        domain
+    )
 
     print("\nUser Profile\n")
-
     print(json.dumps(profile, indent=4))
