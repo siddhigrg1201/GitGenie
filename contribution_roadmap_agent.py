@@ -3,18 +3,26 @@ import os
 import json
 from dotenv import load_dotenv
 from google import genai
+from openai import OpenAI
 
 
 load_dotenv()
 
-api_key = os.getenv("GEMINI_API_KEY")
+gemini_key = os.getenv("GEMINI_API_KEY")
+fallback_key = os.getenv("GROQ_API_KEY")
 
-if not api_key:
+if not gemini_key:
     raise ValueError("GEMINI_API_KEY not found.")
 
+if not fallback_key:
+    raise ValueError("GROQ_API_KEY not found.")
 
-client = genai.Client(api_key=api_key)
+gemini_client = genai.Client(api_key=gemini_key)
 
+fallback_client = OpenAI(
+    api_key=fallback_key,
+    base_url="https://api.groq.com/openai/v1"
+)
 
 
 def fetch_repository(repo_name):
@@ -72,7 +80,7 @@ def fetch_readme(repo_name):
     if response.status_code == 200:
         return response.text
 
-    print("README not found.")
+
     return ""
 
 
@@ -87,18 +95,10 @@ def fetch_issues(repo_name):
     )
 
 
-    try:
-        response = requests.get(
-            url,
-            timeout=10
-        )
-    except requests.RequestException as e:
-        print("Issue Fetch Failed:", e)
-        return []
+    response = requests.get(url)
 
 
     if response.status_code != 200:
-        print("GitHub API Error while fetching issues:", response.status_code)
         return []
 
 
@@ -126,7 +126,45 @@ def fetch_issues(repo_name):
 
     return issue_list
 
+def generate_with_gemini(prompt):
 
+    response = gemini_client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt
+    )
+
+    return response.text
+
+def generate_with_fallback(prompt):
+
+    response = fallback_client.chat.completions.create(
+    model="llama-3.3-70b-versatile",
+    messages=[
+        {
+            "role": "user",
+            "content": prompt
+        }
+    ]
+)
+
+    return response.choices[0].message.content
+
+def generate_response(prompt):
+
+    try:
+        return generate_with_gemini(prompt)
+
+    except Exception:
+
+        try:
+            return generate_with_fallback(prompt)
+
+        except Exception:
+
+            return (
+                "Unable to generate the contribution roadmap because "
+                "both AI providers are currently unavailable."
+            )
 
 
 
@@ -135,97 +173,80 @@ def generate_roadmap(repo, readme, issues):
 
     prompt = f"""
 
-You are an Open Source Contribution Mentor.
+You are an expert Open Source Mentor.
 
-Analyze this GitHub repository and create a contribution roadmap for beginners.
-
+Your job is to create a repository-specific contribution roadmap for beginners.
 
 Repository Information:
 
 {json.dumps(repo, indent=2)}
 
-
 README:
 
-{readme[:6000]}
-
+{readme[:4000]}
 
 Open Issues:
 
 {json.dumps(issues, indent=2)}
 
+Analyze the repository and generate the following:
 
+# Repository Setup
+Explain how to set up this specific repository locally.
+Mention installation commands, dependencies, build steps, and test commands if they are available.
 
-Generate the following:
+# Where Should a Beginner Start?
+Recommend the first files, folders, or documentation to read before contributing and explain why.
 
-
-## 1. Project Understanding
-
-Explain:
-- What this project does
-- Problem it solves
-- Target users
-
-
-## 2. Repository Learning Path
-
-Explain:
-- Which folders to explore first
-- Important files
-- Development setup
-
-
-## 3. Contribution Roadmap
-
-Create steps:
-
-Beginner:
-- First contribution
-
-Intermediate:
-- Feature improvements
-
-Advanced:
-- Major contributions
-
-
-## 4. Beginner Friendly Issues
-
-Suggest suitable issues from available issues.
-
-
-## 5. Required Skills
-
+# First Contribution Recommendation
+Recommend ONE beginner-friendly contribution based on this repository.
 Mention:
-- Languages
-- Frameworks
-- Tools
+- File/Folder to modify
+- Estimated difficulty (Easy/Medium/Hard)
+- Estimated time
+- Why it is a good first contribution
 
+# Contribution Opportunities
+Suggest contributions specific to this repository under:
 
-## 6. 30 Day Open Source Plan
+## Beginner
+## Intermediate
+## Advanced
 
-Create a realistic learning and contribution schedule.
+Base your suggestions on the repository structure and available issues.
 
+# Open Issues Analysis
+From the provided GitHub issues:
+- Recommend the best beginner-friendly issues.
+- Explain why each issue is suitable.
+- Mention any required skills.
 
-Return clean Markdown.
+# Skills Required
+List the languages, frameworks, and tools required to contribute to THIS repository.
+
+# Contribution Workflow
+Explain the complete workflow:
+Fork → Clone → Setup → Create Branch → Code → Test → Commit → Push → Pull Request
+
+Mention repository-specific steps if available in the README.
+
+# Common Mistakes to Avoid
+List common mistakes beginners should avoid when contributing to this repository.
+
+# 30-Day Contribution Plan
+Create a realistic week-by-week plan to become capable of contributing successfully to this repository.
+
+Rules:
+- Make every recommendation repository-specific.
+- Use the README and issues as the primary source.
+- Do NOT explain the repository architecture.
+- Do NOT repeat generic GitHub advice unless necessary.
+- Do NOT invent information that is not supported by the repository.
+- Return clean Markdown only.
 """
 
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt
-        )
-    except Exception as e:
-        print("Gemini API Error:", e)
-        return None
-
-    return response.text
-
-
-
-
-
+    return generate_response(prompt)
 
 def main():
 
@@ -262,14 +283,12 @@ def main():
 
 
     roadmap = generate_roadmap(
-    repo,
-    readme,
-    issues
-)
+        repo,
+        readme,
+        issues
+    )
 
-    if roadmap is None:
-        print("Could not generate contribution roadmap.")
-        return
+
 
     print("=" * 70)
     print("CONTRIBUTION ROADMAP")

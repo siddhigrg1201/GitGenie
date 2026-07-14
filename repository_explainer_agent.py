@@ -1,17 +1,26 @@
 import requests
 from google import genai
+from openai import OpenAI
 from dotenv import load_dotenv
 import os
 import json
 
 load_dotenv()
 
-api_key = os.getenv("GEMINI_API_KEY")
+gemini_key = os.getenv("GEMINI_API_KEY")
+groq_key = os.getenv("GROQ_API_KEY")
 
-if not api_key:
+if not gemini_key:
     raise ValueError("GEMINI_API_KEY not found.")
 
-client = genai.Client(api_key=api_key)
+if not groq_key:
+    raise ValueError("GROQ_API_KEY not found.")
+gemini_client = genai.Client(api_key=gemini_key)
+
+groq_client = OpenAI(
+    api_key=groq_key,
+    base_url="https://api.groq.com/openai/v1"
+)
 
 
 def fetch_repository(repo_name):
@@ -111,13 +120,54 @@ def fetch_file_tree(repo_name):
 
     return file_tree
 
+def generate_with_gemini(prompt):
+
+    response = gemini_client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt
+    )
+
+    return response.text
+
+def generate_with_groq(prompt):
+
+    response = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+    )
+
+    return response.choices[0].message.content
+
+def generate_response(prompt):
+
+
+    try:
+        return generate_with_gemini(prompt)
+
+    except Exception:
+        return generate_with_groq(prompt)
+
+    try:
+        return generate_with_groq(prompt)
+
+    except Exception as groq_error:
+        print("Groq failed.")
+        print(groq_error)
+
+        return "Both Gemini and Groq are currently unavailable."
+
 
 def explain_repository(repository, readme, file_tree):
 
     prompt = f"""
-You are an experienced Open Source Mentor.
+You are an expert Open Source Software Architect.
 
-Below are the repository details.
+Your job is to explain how this GitHub repository works.
 
 Repository Information:
 
@@ -131,52 +181,47 @@ Top Level Files:
 
 {json.dumps(file_tree, indent=2)}
 
-Your task is to explain this repository in beginner-friendly language.
-
 Generate the following sections:
 
-1. Repository Overview
-   - What does this project do?
-   - What problem does it solve?
+# Repository Overview
+- What does this project do?
+- What problem does it solve?
+- Who is the target audience?
 
-2. Repository Architecture
-   - Explain the purpose of important folders/files.
+# Project Architecture
+Explain the overall structure of the project.
 
-3. Tech Stack
-   Mention:
-   - Programming Language
-   - Framework
-   - Package Manager
-   - Build Tool
-   - Testing Tool
-   (Infer these from the README and files if possible.)
+# Core Components
+Explain ONLY the important folders/files that actually exist in this repository and what each one does.
 
-4. Important Files
-   Explain why these files are important:
-   - README.md
-   - CONTRIBUTING.md
-   - package.json
-   - requirements.txt
-   - src/
-   - docs/
+# Tech Stack
+Mention only the technologies actually used:
+- Programming Language
+- Framework
+- Libraries
+- Package Manager
+- Build Tool
+- Testing Framework
 
-5. Beginner Entry Points
-   Tell a beginner:
-   - Which files to read first
-   - Which folders to explore
-   - How to understand the project
+# Project Workflow
+Explain how the project works internally from start to finish.
 
-Return the response in clean Markdown.
+# Key Features
+List the major features of this project.
 
-Do NOT return JSON.
+# Learning Path
+Suggest the order in which a beginner should explore this repository to understand it.
+
+Rules:
+- Do NOT talk about contribution.
+- Do NOT suggest GitHub issues.
+- Do NOT explain missing files.
+- Do NOT write "not present".
+- Keep explanations concise and repository-specific.
+- Return clean Markdown only.
 """
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt
-    )
-
-    return response.text
-
+    
+    return generate_response(prompt)
 
 def generate_repository_explanation(repo_name):
 
