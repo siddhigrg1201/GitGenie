@@ -1,6 +1,6 @@
 from crewai import Crew, Process
 
-from crew.agents import (
+from agents import (
     repository_recommender,
     repository_explainer,
     skill_analyzer,
@@ -9,7 +9,7 @@ from crew.agents import (
     checklist_creator
 )
 
-from crew.tasks import (
+from tasks import (
     skill_task,
     repository_task,
     explanation_task,

@@ -152,7 +152,13 @@ Create a `.env` file in the project root:
 ```env
 GEMINI_API_KEY=your_gemini_api_key
 GROQ_API_KEY=your_groq_api_key
+GITHUB_TOKEN=your_github_personal_access_token
 ```
+
+`GITHUB_TOKEN` is optional but strongly recommended: without it, GitHub's
+API is limited to 60 requests/hour; with a token (no special scopes
+needed — a plain classic token from
+https://github.com/settings/tokens works), it's 5000 requests/hour.
 
 ---
 
