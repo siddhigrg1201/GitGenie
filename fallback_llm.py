@@ -2,6 +2,7 @@ import os
 import copy
 from typing import Any
 
+import time
 import litellm
 from dotenv import load_dotenv
 
@@ -29,7 +30,17 @@ class GeminiGroqFallbackLLM(BaseLLM):
         )
 
         self.gemini_key = os.getenv("GEMINI_API_KEY")
-        self.groq_key = os.getenv("GROQ_API_KEY")
+        self.groq_keys = [
+           os.getenv("GROQ_API_KEY_1"),
+           os.getenv("GROQ_API_KEY_2"),
+           os.getenv("GROQ_API_KEY_3"),
+           os.getenv("GROQ_API_KEY_4"),
+           os.getenv("GROQ_API_KEY_5"),
+           os.getenv("GROQ_API_KEY_6"),
+       ]
+
+       # Remove empty values
+        self.groq_keys = [k for k in self.groq_keys if k]
 
         self.groq_model = "groq/llama-3.3-70b-versatile"
 
@@ -117,48 +128,53 @@ class GeminiGroqFallbackLLM(BaseLLM):
                 tools=tools,
             )
 
+            return response.choices[0].message.content
+        
         except Exception as gemini_error:
 
             print("\n⚠ Gemini Failed")
             print(gemini_error)
 
+            # Sirf Groq rate limit ke liye wait karna useful hai
+            print("Waiting 5 seconds before trying Groq...")
+            #time.sleep(5)
+
             print("\n🔥 Switching to Groq...\n")
 
-            messages = self._clean_messages(messages)
+            last_error = None
 
-            try:
+            for idx, groq_key in enumerate(self.groq_keys, start=1):
+                try:
+                    print(f"\n🚀 Trying Groq Key {idx}...\n")
 
-                response = litellm.completion(
-                    model=self.groq_model,
-                    api_key=self.groq_key,
-                    base_url="https://api.groq.com/openai/v1",
-                    messages=messages,
-                    temperature=self.temperature,
-                    tools=tools,
-                )
+                    response = litellm.completion(
+                        model=self.groq_model,
+                        api_key=groq_key,
+                        base_url="https://api.groq.com/openai/v1",
+                        messages=messages,
+                        temperature=self.temperature,
+                        tools=tools,
+                    )
 
-                return response.choices[0].message.content
+                    print(f"✅ Success with Groq Key {idx}")
 
-            except Exception as groq_error:
+                    return response.choices[0].message.content
 
-                print("\n❌ Groq also failed\n")
-                print(groq_error)
+                except Exception as groq_error:
+                    last_error = groq_error
+                    print(f"❌ Groq Key {idx} Failed: {groq_error}")
 
-                raise RuntimeError(
-                    f"""
-Gemini Error:
-{gemini_error}
+                    # Agar aur keys bachi hain to next key try karo
+                    if idx < len(self.groq_keys):
+                        print(f"➡ Switching to Groq Key {idx + 1}")
+                        continue
 
--------------------------------------
+                    # Last key bhi fail ho gayi
+                    break
 
-Groq Error:
-{groq_error}
-"""
-                )     
-
-              
-              
-                
+            raise RuntimeError(
+                f"Gemini Error:\n{gemini_error}\n\nAll Groq Keys Exhausted\n\nLast Groq Error:\n{last_error}"
+            )
 
     async def acall(
         self,
