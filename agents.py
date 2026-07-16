@@ -9,6 +9,7 @@ from tools import (
     github_file_tree_tool,
     github_issues_tool,
     github_contributing_tool,
+    github_user_profile_tool,
 )
 
 load_dotenv()
@@ -61,10 +62,25 @@ repository_explainer = Agent(
 
 skill_analyzer = Agent(
     role="Skill Analyzer",
-    goal="Analyze user's programming skills, experience level, and interests.",
-    backstory="Experienced developer mentor who creates developer profiles.",
+    goal=(
+        "Analyze a developer's GitHub profile using real GitHub data. "
+        "Identify programming languages, frameworks, libraries, tools, "
+        "experience level, interests and strengths only from repository evidence. "
+        "Never hallucinate technologies."
+    ),
+    backstory=(
+        "Experienced software engineer and technical recruiter who analyzes "
+        "GitHub profiles and creates evidence-based developer assessments."
+    ),
+    tools=[
+        github_user_profile_tool,
+        github_repo_info_tool,
+        github_readme_tool,
+        github_file_tree_tool
+    ],
     llm=llm,
-    verbose=True
+    verbose=True,
+    allow_delegation=False
 )
 
 

@@ -96,33 +96,46 @@ class GeminiGroqFallbackLLM(BaseLLM):
 
         return kwargs
 
-    def _run_with_tool_loop(self, model, api_key, messages, tools, available_functions, base_url=None):
+    def _single_call(self, model, api_key, messages, tools, available_functions, base_url=None):
         """
-        Calls the LLM, and if it requests a tool call, actually executes the
-        tool (via available_functions), feeds the result back, and calls the
-        LLM again — repeating until it returns a final text answer.
+        Makes ONE completion call and returns either:
+        - the raw list of tool_calls (so CrewAI's own native-tool-calling
+          executor can run them and loop) — this is what happens in
+          CrewAI's normal flow, where `available_functions` is always None.
+        - final text content, if the model didn't request any tool.
+        - if `available_functions` IS provided (a non-native/manual flow),
+          execute the requested tools ourselves and feed results back until
+          a final text answer comes out, as a convenience for callers
+          outside CrewAI's native tool loop.
 
-        Without this loop, when tools are attached, the model's first
-        response often has empty `content` (the real answer is in
-        `tool_calls` instead), which used to surface as
-        "Invalid response from LLM call - None or empty."
+        IMPORTANT: previously this method executed tools itself even when
+        `available_functions` was None/empty, which meant every tool call
+        resolved to "Error: tool 'X' not found." — the model would then
+        (correctly, given what it was told) report the tool as unavailable
+        and fall back to guessing. CrewAI passes `available_functions=None`
+        in its native tool-calling path by design: it expects `call()` to
+        hand back the tool_calls list, not execute them.
         """
-        messages = list(messages)
-        max_iterations = 6
-
         completion_kwargs = {"model": model, "api_key": api_key, "temperature": self.temperature}
         if base_url:
             completion_kwargs["base_url"] = base_url
 
+        response = litellm.completion(messages=messages, tools=tools, **completion_kwargs)
+        message = response.choices[0].message
+        tool_calls = getattr(message, "tool_calls", None)
+
+        if not tool_calls:
+            return message.content or ""
+
+        if not available_functions:
+            # Native flow: let CrewAI execute the tools and continue the loop.
+            return tool_calls
+
+        # Manual flow: we were given real callables, so execute the loop ourselves.
+        messages = list(messages)
+        max_iterations = 6
+
         for _ in range(max_iterations):
-            response = litellm.completion(messages=messages, tools=tools, **completion_kwargs)
-            message = response.choices[0].message
-            tool_calls = getattr(message, "tool_calls", None)
-
-            if not tool_calls:
-                return message.content or ""
-
-            # Record the assistant's tool-call request in the conversation
             messages.append({
                 "role": "assistant",
                 "content": message.content or "",
@@ -139,7 +152,6 @@ class GeminiGroqFallbackLLM(BaseLLM):
                 ],
             })
 
-            # Actually execute each requested tool and feed the result back
             for tc in tool_calls:
                 func_name = tc.function.name
 
@@ -148,7 +160,7 @@ class GeminiGroqFallbackLLM(BaseLLM):
                 except json.JSONDecodeError:
                     args = {}
 
-                func = (available_functions or {}).get(func_name)
+                func = available_functions.get(func_name)
 
                 if func is None:
                     result = f"Error: tool '{func_name}' not found."
@@ -164,8 +176,13 @@ class GeminiGroqFallbackLLM(BaseLLM):
                     "content": str(result),
                 })
 
-        # Ran out of tool-call rounds; ask once more without tools so the
-        # model is forced to summarize instead of looping forever.
+            response = litellm.completion(messages=messages, tools=tools, **completion_kwargs)
+            message = response.choices[0].message
+            tool_calls = getattr(message, "tool_calls", None)
+
+            if not tool_calls:
+                return message.content or ""
+
         final = litellm.completion(messages=messages, **completion_kwargs)
         return final.choices[0].message.content or ""
 
@@ -194,7 +211,7 @@ class GeminiGroqFallbackLLM(BaseLLM):
 
             print("\n✨ Trying Gemini...\n")
 
-            return self._run_with_tool_loop(
+            return self._single_call(
                 model="gemini/gemini-2.0-flash",
                 api_key=self.gemini_key,
                 messages=messages,
@@ -207,6 +224,10 @@ class GeminiGroqFallbackLLM(BaseLLM):
             print("\n⚠ Gemini Failed")
             print(gemini_error)
 
+            #Sirf Groq rate limit ke liye wait karna useful hai
+            print("Waiting 20 seconds before trying Groq...")
+            time.sleep(30)
+
             print("\n🔥 Switching to Groq...\n")
 
             last_error = None
@@ -215,7 +236,7 @@ class GeminiGroqFallbackLLM(BaseLLM):
                 try:
                     print(f"\n🚀 Trying Groq Key {idx}...\n")
 
-                    result = self._run_with_tool_loop(
+                    result = self._single_call(
                         model=self.groq_model,
                         api_key=groq_key,
                         messages=messages,

@@ -18,9 +18,19 @@ from tasks import (
     checklist_task
 )
 
-gitgenie_crew = Crew(
+profile_crew = Crew(
     agents=[
-        skill_analyzer,
+        skill_analyzer
+    ],
+    tasks=[
+        skill_task
+    ],
+    process=Process.sequential,
+    verbose=True
+)
+
+recommendation_crew = Crew(
+    agents=[
         repository_recommender,
         repository_explainer,
         issue_recommender,
@@ -28,7 +38,6 @@ gitgenie_crew = Crew(
         checklist_creator
     ],
     tasks=[
-        skill_task,
         repository_task,
         explanation_task,
         issue_task,

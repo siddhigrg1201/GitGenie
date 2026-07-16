@@ -5,6 +5,20 @@ from crewai.tools import tool
 import github_data
 
 
+@tool("GitHub User Profile")
+def github_user_profile_tool(username: str) -> str:
+    """Fetch a real GitHub user's public profile: bio, company, location,
+    public repo count, followers, the languages they actually use (derived
+    from their own non-fork repositories, not self-reported), and their
+    top repositories by stars.
+    Input MUST be a GitHub username (e.g. 'torvalds'), not a full URL.
+    Returns JSON. If the username doesn't exist or has no usable public
+    data, this will come back with an 'error' key or empty
+    languages_by_repo_count/top_repos — treat that as a signal to rely on
+    the experience/interests the user typed instead of guessing."""
+    return json.dumps(github_data.fetch_github_user_profile(username))
+
+
 @tool("GitHub Repository Search")
 def github_search_tool(query: str) -> str:
     """Search GitHub repositories via the GitHub Search API.

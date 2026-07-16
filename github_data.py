@@ -145,6 +145,76 @@ def fetch_issues(repo_name, per_page=20):
     ]
 
 
+def fetch_github_user_profile(username):
+    """
+    Fetch a real GitHub user's public profile: bio, stats, and the
+    languages they actually use (derived from their own repositories,
+    not self-reported). This is what the Skill Analyzer should ground
+    itself in instead of guessing from a name alone.
+    """
+    user_url = f"{GITHUB_API}/users/{username}"
+
+    try:
+        user_response = requests.get(user_url, headers=HEADERS, timeout=10)
+    except requests.RequestException as e:
+        return {"error": f"Request failed: {e}"}
+
+    if user_response.status_code != 200:
+        return {"error": f"GitHub user '{username}' not found (status {user_response.status_code})."}
+
+    user_data = user_response.json()
+
+    repos_url = f"{GITHUB_API}/users/{username}/repos"
+    params = {"sort": "updated", "per_page": 30, "type": "owner"}
+
+    try:
+        repos_response = requests.get(repos_url, params=params, headers=HEADERS, timeout=10)
+    except requests.RequestException:
+        repos_response = None
+
+    repos = repos_response.json() if repos_response is not None and repos_response.status_code == 200 else []
+    if not isinstance(repos, list):
+        repos = []
+
+    # Count how many of the user's own repos use each language, and treat
+    # that as a proxy for real, demonstrated skill (not self-reported).
+    language_counts = {}
+    top_repos = []
+
+    for repo in repos:
+        if repo.get("fork"):
+            continue  # forked repos aren't the user's own work
+
+        language = repo.get("language")
+        if language:
+            language_counts[language] = language_counts.get(language, 0) + 1
+
+        top_repos.append({
+            "name": repo.get("name", ""),
+            "language": language,
+            "stars": repo.get("stargazers_count", 0),
+            "description": repo.get("description", ""),
+            "topics": repo.get("topics", []),
+        })
+
+    top_repos = sorted(top_repos, key=lambda r: r["stars"], reverse=True)[:10]
+    languages_by_usage = sorted(language_counts.items(), key=lambda kv: kv[1], reverse=True)
+
+    return {
+        "username": user_data.get("login"),
+        "name": user_data.get("name"),
+        "bio": user_data.get("bio"),
+        "company": user_data.get("company"),
+        "location": user_data.get("location"),
+        "public_repos": user_data.get("public_repos", 0),
+        "followers": user_data.get("followers", 0),
+        "own_non_fork_repos_seen": len(top_repos) if not top_repos else len([r for r in repos if not r.get("fork")]),
+        "languages_by_repo_count": [{"language": lang, "repo_count": count} for lang, count in languages_by_usage],
+        "top_repos": top_repos,
+        "profile_url": user_data.get("html_url"),
+    }
+
+
 def fetch_contributing_file(repo_name):
     """Fetch CONTRIBUTING.md content, checking common locations."""
     paths = ["CONTRIBUTING.md", ".github/CONTRIBUTING.md", "docs/CONTRIBUTING.md"]
