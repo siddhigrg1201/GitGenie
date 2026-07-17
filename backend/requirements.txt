@@ -1,0 +1,9 @@
+crewai
+litellm
+python-dotenv
+google-genai
+groq
+openai
+requests
+fastapi
+uvicorn[standard]
