@@ -23,12 +23,19 @@ class GeminiGroqFallbackLLM(BaseLLM):
     Groq
     """
 
-    def __init__(self):
+    def __init__(self, max_tokens: int = 4096):
         super().__init__(
             model="gemini/gemini-2.0-flash",
             temperature=0.3,
             provider="gemini"
         )
+
+        # NOTE: this was previously never set, so litellm/Groq fell back to
+        # their own (much lower) default output cap -- which is why large
+        # JSON responses (e.g. 10 ranked repositories) were getting cut off
+        # mid-stream and failing to parse downstream. Bump this if your
+        # schema is bigger than ~4096 tokens of output.
+        self.max_tokens = max_tokens
 
         self.gemini_key = os.getenv("GEMINI_API_KEY")
         self.groq_keys = [
@@ -127,13 +134,25 @@ class GeminiGroqFallbackLLM(BaseLLM):
         in its native tool-calling path by design: it expects `call()` to
         hand back the tool_calls list, not execute them.
         """
-        completion_kwargs = {"model": model, "api_key": api_key, "temperature": self.temperature}
+        completion_kwargs = {
+            "model": model,
+            "api_key": api_key,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+        }
         if base_url:
             completion_kwargs["base_url"] = base_url
 
         response = litellm.completion(messages=messages, tools=tools, **completion_kwargs)
         message = response.choices[0].message
         tool_calls = getattr(message, "tool_calls", None)
+        finish_reason = getattr(response.choices[0], "finish_reason", None)
+
+        if finish_reason == "length":
+            print(
+                f"⚠ Response was truncated (hit max_tokens={self.max_tokens}). "
+                "Consider raising max_tokens or shrinking the requested output schema."
+            )
 
         if not tool_calls:
             return message.content or ""
