@@ -237,7 +237,7 @@ class GeminiGroqFallbackLLM(BaseLLM):
 
             #Sirf Groq rate limit ke liye wait karna useful hai
             #print("Waiting 20 seconds before trying Groq...")
-            #time.sleep(30)
+            time.sleep(10)
 
             print("\n🔥 Switching to Groq...\n")
 
