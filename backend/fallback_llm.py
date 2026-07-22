@@ -54,7 +54,7 @@ class GeminiGroqFallbackLLM(BaseLLM):
        # Remove empty values
         self.groq_keys = [k for k in self.groq_keys if k]
 
-        self.groq_model = "groq/llama-3.1-8b-instant"
+        self.groq_model = "groq/llama-3.3-70b-versatile"
 
     def _clean_messages(self, messages):
 
@@ -237,7 +237,7 @@ class GeminiGroqFallbackLLM(BaseLLM):
 
             #Sirf Groq rate limit ke liye wait karna useful hai
             #print("Waiting 20 seconds before trying Groq...")
-            #time.sleep(10)
+            time.sleep(5)
 
             print("\n🔥 Switching to Groq...\n")
 
